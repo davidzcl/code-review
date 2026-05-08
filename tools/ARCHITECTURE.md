@@ -105,7 +105,7 @@ class WorkspaceStatus:
     raw_diff: str
 ```
 
-### 2. Diff 解析器（待实现）
+### 2. Diff 解析器（已实现）
 
 ```python
 @dataclass
@@ -145,7 +145,7 @@ class DiffParseError(Exception):
     """Diff 解析异常。"""
 ```
 
-### 3. PR 解析器（待实现）
+### 3. PR 解析器（已实现）
 
 ```python
 @dataclass
@@ -327,23 +327,33 @@ def scan_secrets_detect_secrets(file_path: str) -> list[SecretFinding]
     """通过 detect-secrets 库扫描文件（可选依赖）。"""
 ```
 
-### 8. 代码搜索（待实现，tools/search.py）
+### 8. 代码搜索（tools/search.py）
 
 ```python
+@dataclass
+class SearchResult:
+    file_path: str
+    line: int
+    content: str
+
 def search_code(
     pattern: str,
     path: str = ".",
     file_types: str | None = None,
     case_sensitive: bool = False,
-    max_chars: int = 8000,
-) -> str
-    """在代码库中搜索文本模式（git grep）。
+) -> list[SearchResult]
+    """在代码库中搜索文本模式。
 
-    结果数量受 SEARCH_MAX_RESULTS 限制（默认 200 行）。
+    优先使用 git grep（仅搜索已跟踪文件），
+    遇到新文件/untracked 文件时回退到 ripgrep。
+
+    自动排除目录: .git, .review-agent, .tmp, .pytest_cache,
+                  __pycache__, node_modules, .venv
+    自动跳过文件扩展名: .md, .txt, .toml, .yaml, .yml, .json
     """
 ```
 
-### 9. 风险分析（待实现，tools/risk_scan.py）
+### 9. 风险分析（tools/risk_scan.py）
 
 ```python
 @dataclass
@@ -352,15 +362,47 @@ class RiskScore:
     risk_level: str       # "high" | "medium" | "low"
     reasons: list[str]
 
+@dataclass
+class RiskFinding:
+    file_path: str
+    line: int
+    category: str
+    signal: str
+    evidence: str
+    rationale: str
+    risk_level: str
+
 def hotspot_analysis(changed_files: list[str]) -> list[RiskScore]
     """分析变更文件的风险等级。
 
     高风险类别：authentication / authorization / data_persistence /
-    payment / crypto / config / ci_cd。
+    payment / crypto / config / ci_cd / networking。
     """
 
 def static_analysis(file_path: str, language: str) -> list[dict]
-    """语言特定的静态分析（P3 阶段实现）。"""
+    """语言特定的静态分析（Python → ruff, JS/TS → eslint）。"""
+
+def scan_risk_signals(
+    base: str | None = None,
+    target: str | None = None,
+) -> dict[str, list[RiskFinding]]
+    """扫描 diff 新增行中的风险信号 + 测试覆盖检测。
+
+    流程:
+      diff → 解析新增行 → 行级正则匹配 → 跨行空 except 检测
+      → 测试覆盖检查（critical/important 级别文件的缺失测试）
+
+    行级规则覆盖:
+      - sql_injection: raw_sql_concat, fstring_in_sql
+      - command_injection: shell_true, eval_exec_usage
+      - sensitive_info: leak_to_log
+      - signature_verify: disabled_verify, disabled_hostname_check
+      - correctness: mutable_default_arg, negative_amount,
+                     bypass_approval, empty_except
+
+    返回:
+        {"risk_signals": [...], "test_gaps": [...]}
+    """
 ```
 
 ---
@@ -376,12 +418,12 @@ tools/
 ├── test_runner.py        # 安全测试执行（已实现）
 ├── tools.py              # Git 只读操作封装（已实现）
 ├── toolkit.py            # Toolkit 注册与调用调度（待实现）
-├── diff_parser.py        # diff 解析（待实现）
-├── pr_parser.py          # PR 描述解析（待实现）
+├── diff_parser.py        # diff 解析（已实现）
+├── pr_parser.py          # PR 描述解析（已实现）
 ├── report_writer.py      # 报告生成（待实现）
 ├── secret_scanner.py     # 密钥扫描（待实现）
-├── search.py             # 代码搜索（待实现）
-└── risk_scan.py          # 风险分析（待实现）
+├── search.py             # 代码搜索（已实现）
+├── risk_scan.py          # 风险分析（已实现）
 ```
 
 ### 核心算法
@@ -409,6 +451,13 @@ tools/
   2. `---`/`+++` 确认文件路径
   3. `@@` 行解析起始行号和改动计数
   4. `+`/`-`/` ` 前缀按行分类
+
+- **risk_scan**: 基于正则的风险信号引擎：
+  1. `git_diff` 获取 unified diff
+  2. 状态机解析新增行（`+` 前缀）及其文件路径、行号
+  3. 逐行匹配预编译危险模式集（SQL 注入/命令注入/敏感信息泄露/签名绕过/正确性陷阱）
+  4. 跨行检测（`except: ... pass` 空异常块）
+  5. 检测 `critical`/`important` 级别风险文件的测试覆盖缺口
 
 - **secret_scanner**: 多规则正则匹配引擎：
   1. 逐行扫描

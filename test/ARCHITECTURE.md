@@ -23,8 +23,8 @@ test/
 │   └── mock_responses/            # Mock LLM 响应
 │       └── reviewer_findings.json
 ├── verify_model_registry.py       # [PASS] F-01
-├── verify_diff_parser.py          # [PENDING] F-03
-├── verify_pr_parser.py            # [PENDING] F-04
+├── verify_diff_parser.py          # [PASS] F-03
+├── verify_pr_parser.py            # [PASS] F-04
 ├── verify_reviewer_agent.py       # [PENDING] F-05
 ├── verify_parallel_review.py      # [PENDING] F-06
 ├── verify_debate_loop.py          # [PENDING] F-07
@@ -102,5 +102,6 @@ if __name__ == "__main__":
 |------|------|------|
 | `agents` | 运行时依赖 | 被测模块 |
 | `tools` | 运行时依赖 | 被测模块 |
+| `pipeline` | 运行时依赖 | 被测模块 |
 | `skills` | 运行时依赖 | 被测模块 |
 | `fixtures/` | 数据依赖 | 测试样本数据 |

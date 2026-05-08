@@ -39,7 +39,7 @@ PATTERNS: List[Tuple[str, str, float]] = [
     ("google_api_key",       r'(?<![A-Za-z0-9])AIza[0-9A-Za-z\-_]{35}(?![A-Za-z0-9])',   0.90),
     ("stripe_key",           r'(?<![A-Za-z0-9])(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{24,}(?![A-Za-z0-9])', 0.95),
     ("basic_auth_header",    r'Basic\s+[A-Za-z0-9+/=]{20,}',                              0.85),
-    ("password_assignment",  r'(?i)(?:password|passwd|pwd|secret)\s*[:=]\s*[\'"][^\s]{8,}[\'"]', 0.50),
+    ("password_assignment",  r"(?i)\b(api[_-]?(?:key|token)|secret|token|password)\b\s*[:=]\s*['\"]?([A-Za-z0-9_\-./+=]{8,})", 0.50),
 ]
 
 

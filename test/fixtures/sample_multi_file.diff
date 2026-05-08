@@ -1,0 +1,52 @@
+diff --git a/src/models/user.py b/src/models/user.py
+new file mode 100644
+index 0000000..a1b2c3d
+--- /dev/null
++++ b/src/models/user.py
+@@ -0,0 +1,15 @@
++from dataclasses import dataclass
++
++
++@dataclass
++class User:
++    id: int
++    name: str
++    email: str
++    is_active: bool = True
++
++    def deactivate(self) -> None:
++        self.is_active = False
++
++    def reactivate(self) -> None:
++        self.is_active = True
+diff --git a/src/services/auth.py b/src/services/auth.py
+index f1e2d3c..4a5b6c7 100644
+--- a/src/services/auth.py
++++ b/src/services/auth.py
+@@ -1,8 +1,12 @@
+ import hashlib
++import hmac
++import time
+ from typing import Optional
+ 
+ 
+-def hash_password(password: str) -> str:
+-    """简单密码哈希"""
+-    return hashlib.sha256(password.encode()).hexdigest()
++def hash_password(password: str, salt: Optional[str] = None) -> str:
++    """加盐密码哈希"""
++    actual_salt = salt or str(time.time())
++    salted = password + actual_salt
++    return hashlib.sha256(salted.encode()).hexdigest()
+diff --git a/src/legacy/deprecated.py b/src/legacy/deprecated.py
+deleted file mode 100644
+index 9z8y7x6..0000000
+--- a/src/legacy/deprecated.py
++++ /dev/null
+@@ -1,6 +0,0 @@
+-"""已废弃模块，由 src/services/auth.py 替代"""
+-
+-
+-def old_hash(password: str) -> str:
+-    """遗留哈希函数"""
+-    return hashlib.md5(password.encode()).hexdigest()

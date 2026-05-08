@@ -1,0 +1,24 @@
+diff --git a/src/utils/calculator.py b/src/utils/calculator.py
+index abc1234..def5678 100644
+--- a/src/utils/calculator.py
++++ b/src/utils/calculator.py
+@@ -10,7 +10,7 @@ def divide(a: int, b: int) -> float:
+     """除法运算
+ 
+     Args:
+-        a: 被除数
++        a: 被除数（支持负数）
+         b: 除数
+ 
+     Returns:
+@@ -18,6 +18,7 @@ def divide(a: int, b: int) -> float:
+ 
+     Raises:
+         ValueError: 除数为零
++        TypeError: 参数非整数
+     """
+     if b == 0:
+         raise ValueError("除数不能为零")
++    if not isinstance(a, int) or not isinstance(b, int):
++        raise TypeError("参数必须为整数")
+     return a / b

@@ -103,8 +103,9 @@
 ```
 code-review/
 ├── agents/           # AgentScope agent 封装模块
-├── tools/            # 工具组件
-├── skills/           # 技能模块（辩论循环、裁决逻辑）
+├── tools/            # 工具组件（Git、解析器、扫描器）
+├── pipeline/         # 调度编排层（工作流控制、辩论引擎、裁决逻辑）
+├── skills/           # 技能注册目录（仅存放 skill.md 文件，不含代码）
 ├── test/             # 测试代码与 fixtures
 ├── docs/             # 项目文档
 ├── .env              # 环境变量（不提交）
@@ -119,15 +120,7 @@ code-review/
 
 ## agent 角色定义
 
-| agent 名称 | 角色 | 职责 |
-|------------|------|------|
-| SecurityReviewer | 安全审计 | 注入攻击、认证绕过、敏感信息泄露、加密缺陷 |
-| PerformanceReviewer | 性能优化 | N+1 查询、内存泄漏、阻塞 IO、锁竞争、算法退化 |
-| LogicReviewer | 逻辑审查 | 边界条件、空值检查、异常处理、竞态条件、事务一致性 |
-| StyleReviewer | 代码风格 | 命名规范、函数复杂度、重复代码、耦合度、测试覆盖 |
-| Prosecutor | 质疑者 | 对候选问题进行合理性验证与质疑 |
-| Defender | 辩护者 | 收集支持证据，反驳不合理的质疑 |
-| Judge | 裁决者 | 合并重复发现，做出最终评审结论 |
+查看文件 ‘agents\ARCHITECTURE.md’，获取agent角色定义信息。
 
 ---
 
@@ -144,20 +137,30 @@ code-review/
                      (并行)                tools/risk_scan       (可选搜索)
                                 │               │               │
                                 ▼               ▼               ▼
-                         skills/debate_loop.py  ──→ 辩论循环
-                         ├── 质疑 (prosecutor)
-                         ├── 辩护 (defender)
-                         ├── 反驳
-                         ├── 合并 (issue_merger)
-                         └── 裁决 (verdict)
-                                                │
-                                                ▼
-                         tools/report_writer.py ──→ 评审报告 (MD/HTML)
-                                                │
-                                                ▼
-                         agents/evaluator.py   ──→ 质量评估 (可选)
+                    pipeline/parallel_review.py ──→ 并行调度 + 结果汇总
+                                │
+▼
+                    pipeline/debate_loop.py  ──→ 辩论循环
+├── 质疑 (agents/prosecutor)
+├── 辩护 (agents/defender)
+├── 反驳
+├── 合并 (pipeline/issue_merger)
+└── 裁决 (pipeline/verdict)
+│
+▼
+                    tools/report_writer.py ──→ 评审报告 (MD/HTML)
+│
+▼
+                    agents/evaluator.py   ──→ 质量评估 (可选)
 ```
 ---
+
+## 任务结束操作
+
+- 更新 `PROGRESS.md` 文件，记录任务完成情况。
+- 更新子目录的 `ARCHITECTURE.md` 文件，记录架构更新情况。
+- 更新 `docs\features.md` 文件，记录新功能。
+- 提交代码到版本控制仓库，更新 `git commit -m "任务完成：PR ..."`。
 
 ## 经验总结
 
@@ -165,3 +168,4 @@ code-review/
 2. **PowerShell `&&` 不兼容**：Windows 下多命令串联需使用 `;` 或分次执行
 3. **`git diff HEAD` 回退策略**：裸仓库无 HEAD commit 时自动降级为 `git diff`
 4. **singleton 双重检查锁**：`__new__` + `__init__` 均加锁，防止竞态条件下重复初始化
+5. **沙箱python环境**：D:\software\Anaconda3\envs\agentscope\python.exe
