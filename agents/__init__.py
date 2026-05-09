@@ -13,6 +13,7 @@ from agents.model_registry import (
 from agents.reviewer import Finding, ReviewerAgent
 from agents.prosecutor import ProsecutorAgent, Challenge
 from agents.defender import DefenderAgent, Defense
+from agents.evaluator import EvaluatorAgent, EvaluationResult
 
 __all__ = [
     "create_model",
@@ -27,4 +28,6 @@ __all__ = [
     "Challenge",
     "DefenderAgent",
     "Defense",
+    "EvaluatorAgent",
+    "EvaluationResult",
 ]

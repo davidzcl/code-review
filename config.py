@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 import dotenv
 
 # 项目根目录
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent
 
 # 加载 .env
 dotenv.load_dotenv(PROJECT_ROOT / ".env")
@@ -201,6 +201,8 @@ LOG_FORMAT = _env(
 """日志记录格式。"""
 LOG_DATE_FORMAT = _env("LOG_DATE_FORMAT", "%Y-%m-%d %H:%M:%S")
 """日志时间戳格式。"""
+LOG_RETENTION_DAYS = _env_int("LOG_RETENTION_DAYS", 30)
+"""每日日志文件的保留天数（默认 30 天），超过此期限的日志文件自动清理。"""
 
 
 def get_model_config(model_type: str = "dashscope") -> Dict[str, Any]:

@@ -5,7 +5,7 @@
 `agents/` 负责 AgentScope 框架下的智能代理封装，提供：
 - 统一的 agent 创建接口（基于模型注册机制）
 - 评审者 agent 的标准化定义与配置
-- 辩论循环中各角色 agent（质疑者、辩护者、裁决者）的实现
+- 辩论循环中各角色 agent（质疑者、辩护者）的实现
 - 质量评估 agent（可选模块）
 
 **边界**：agent 模块不处理 Git 数据解析、报告格式化或辩论循环控制流——这些分别属于 `tools/` 和 `pipeline/`。
@@ -108,23 +108,35 @@ class DefenderAgent:
         challenge: Challenge,
         diff_context: str       # 相关代码上下文
     ) -> Defense
-
-
-class JudgeAgent:
-    """
-    参数:
-        name: str
-        model: ChatModelBase
-    """
-    async def adjudicate(self, debate_record: DebateRecord) -> Verdict
-
-@dataclass
-class Verdict:
-    findings: list[Finding]    # 最终确认的发现列表
-    dismissed: list[str]       # 被驳回的 finding_id
-    merged: list[MergeRecord]  # 合并记录
-    summary: str               # 评审总结
 ```
+
+### 4. 质量评估 Agent（已完成）
+
+```python
+class EvaluationResult(BaseModel):
+    score: float               # 总体评分 0.0~1.0
+    coverage_score: float      # 覆盖率评分
+    clarity_score: float       # 清晰度评分
+    actionability_score: float # 可操作性评分
+    summary: str               # 评估总结
+    improvement_suggestions: list[str]  # 改进建议
+
+
+class EvaluatorAgent(ReActAgent):
+    """已实现。继承 ReActAgent，对报告进行质量评估。"""
+
+    async def evaluate(
+        self,
+        verdict: Verdict,
+        pr_context: PRContext,
+    ) -> EvaluationResult
+```
+
+**评分规则**：
+- 覆盖率 = reviewer role 种类数 / 4（security, performance, logic, style）
+- 清晰度 = 有 file_path + line_range 的发现比例
+- 可操作性 = 有 suggestion 的发现比例
+- 总体评分 = coverage×0.30 + clarity×0.40 + actionability×0.30
 
 **错误处理**：
 - `ModelRegistryError`：模型类型未注册
@@ -156,8 +168,7 @@ agents/
 ├── defender.py           # 辩护者 agent（已完成）
 │   ├── Defense            # 辩护数据类（pydantic BaseModel）
 │   └── DefenderAgent      # 辩护者 Agent（async defend）
-├── judge.py              # 裁决者 agent（待实现）
-└── evaluator.py          # 质量评估 agent（待实现）
+└── evaluator.py          # 质量评估模块（已完成）
 ```
 
 ### 核心算法
@@ -165,7 +176,7 @@ agents/
 - **评审者**：提示词注入 + ReActAgent 工具调用 chain，分阶段执行「理解 diff → 识别模式 → 生成发现」
 - **质疑者**：接收 Finding + 代码上下文 → 生成质疑 → 评分
 - **辩护者**：接收 Finding + Challenge → 查证代码 → 输出 Defense
-- **裁决者**：聚合多轮 Debate → 按置信度排序 → 低于阈值丢弃 → 相似度聚类合并 → 生成 Verdict
+- **裁决**：辩论记录 + 合并记录 → `pipeline/verdict.py` 纯规则引擎聚合（confirmed/dismissed 提取 + 去重 + 统计），无 LLM 调用
 
 ### 数据流程
 
@@ -173,7 +184,7 @@ agents/
 config.py ──→ create_model(config) ──→ ChatModelBase ──→ ReviewerAgent(model)
                                                        ──→ ProsecutorAgent(model)
                                                        ──→ DefenderAgent(model)
-                                                       ──→ JudgeAgent(model)
+                                                       ──→ EvaluatorAgent(model)
 ```
 
 ---
@@ -201,86 +212,25 @@ config.py ──→ create_model(config) ──→ ChatModelBase ──→ Revie
 
 ---
 
+## 常见错误与解决方案
+
+> 完整记录参见 `docs/errors-and-resolutions.md` §2 + §4。
+
+---
+
 ## 经验总结
 
-### structured_model 替代手工 JSON 解析
+### structured_model 机制
 
-ProsecutorAgent、DefenderAgent 初始实现通过 `_parse_challenge()` / `_extract_text()` 等手工方法从 LLM 文本响应中提取 JSON 并构造数据类。经重构后，利用 AgentScope ReActAgent 内置的 `structured_model` 参数消除所有解析代码。
+ProsecutorAgent、DefenderAgent 利用 AgentScope ReActAgent 内置的 `structured_model` 参数消除手工 JSON 解析。
+`structured_model` 使用 `pydantic.BaseModel` 定义数据类，`@field_validator` 声明式校验，构造时自动触发。
+`reply(msg, structured_model=xxx)` 触发 function calling，通过 pydantic schema 强制约束 LLM 输出，
+结构化数据存入 `response.metadata`。
 
-#### 机制
+**MockModel 模式**：返回 `ChatResponse` 含 `ToolUseBlock`，`input` 字段名须与 pydantic 模型字段一致。
 
-`reply(msg, structured_model=Challenge)` 触发 ReActAgent 内部流程：
-1. 根据 `Challenge.model_json_schema()` 注册 `generate_response` tool
-2. 强制 LLM 以 function calling 方式调用该 tool（`tool_choice="required"`）
-3. `generate_response(**kwargs)` 中执行 `Challenge.model_validate(kwargs).model_dump()`
-4. 结构化数据存入 `response.metadata`
-
-调用方直接 `Challenge(**response.metadata)` 构造结果，无需任何 JSON 解析或文本提取。
-
-#### 变更对比
-
-| 维度 | 旧方案 | 新方案 |
-|------|--------|--------|
-| 代码量 | `_parse_*` + `_extract_text` 共 ~100 行/agent | 0 行 |
-| 输出约束 | Prompt 中写 JSON 格式描述，模型可能偏离 | LLM function calling + pydantic schema，强制匹配 |
-| 错误处理 | 手工 `try/except JSONDecodeError` | `model_validate` 自动校验类型，异常回退写在调用方 |
-| 测试 | 需测试 JSON 解析、非法输入、嵌套 JSON 等边缘情况 | 删除对应测试项（~25 项），MockModel 返回 `ToolUseBlock` 模拟真实 LLM 行为 |
-| 维护成本 | 每个新数据类需配套解析方法 | 继承 `BaseModel` 即自动获得 schema，无额外代码 |
-
-#### MockModel 测试模式
-
-```python
-MockModel.__call__ 返回 ChatResponse(content=[
-    TextBlock(type="text", text="分析完成"),
-    ToolUseBlock(type="tool_use", id="call_1",
-                 name="generate_response", input={...}),
-])
-```
-
-ReActAgent 的 `_acting()` 执行 `generate_response(**input)`，通过 pydantic 校验后产出 `response.metadata`。Mock 仅需保证 `input` 字段名与 pydantic 模型字段一致。
-
-### Finding 使用 pydantic.BaseModel 而非 @dataclass
-
-`Finding` 数据类从 `@dataclass` 重构为 `pydantic.BaseModel`，基于以下考虑：
-
-| 考虑 | `@dataclass` | `pydantic.BaseModel` |
-|------|-------------|---------------------|
-| 类型校验 | 手动 `_validate_severity()` 函数 | `@field_validator` 声明式，构造时自动触发 |
-| JSON schema | 无 | `model_json_schema()` 可直接注入 LLM function calling |
-| 与 ReActAgent 集成 | 不支持 `structured_model` | 可直接传入 `reply(structured_model=Finding)` 约束 LLM 输出 |
-| 序列化 | 需手动 `to_dict()` | 内置 `model_dump()` / `model_dump_json()` |
-| 依赖 | 标准库 | 已在 `agentscope` 传递依赖中 |
-
-#### 关键变更模式
-
-```python
-# 旧版 @dataclass
-from dataclasses import dataclass, field
-
-@dataclass
-class Finding:
-    id: str = ""
-    def __post_init__(self):
-        if not self.id:
-            self.id = str(uuid.uuid4())
-    evidence: list[str] = field(default_factory=list)
-
-# 新版 pydantic
-from pydantic import BaseModel, Field, field_validator
-
-class Finding(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    evidence: list[str] = Field(default_factory=list)
-
-    @field_validator("severity")
-    @classmethod
-    def _check_severity(cls, v: str) -> str:
-        ...
-```
-
-#### 注意点
-
-1. **缓存失效**：`__pycache__` 中旧 bytecode 可能残留旧 dataclass 结构，模块导入后 `_ReActAgentMeta` 的 `__new__` 仍引用旧布局。重构后必须清理 `agents/__pycache__/`。
-2. **异常捕获链**：pydantic 校验失败抛出 `ValidationError`（非 `ValueError`），`_parse_findings` 中的 except 子句必须追加 `ValidationError`。
-3. **`from __future__ import annotations` 行为差异**：pydantic v2 在 `from __future__ import annotations` 下使用 `__pydantic_fields__` 而非 `__annotations__` 解析字段。字段定义必须使用 pydantic 类型（如 `List[str]` 而非 `list[str]`）以确保正确校验。
+**注意**：
+1. 模块重构后必须清理 `__pycache__`，避免旧 bytecode 残留
+2. pydantic 校验失败抛出 `ValidationError`，非 `ValueError`
+3. `from __future__ import annotations` 下须使用 pydantic 类型确保正确校验
 

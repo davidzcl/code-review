@@ -122,6 +122,54 @@ def make_final_verdict(
 2. 按合并记录移除被 merged 的 finding（保留 primary）
 3. 生成总结文本，含数量统计和严重级别分布
 
+### 4. 系统入口编排 — main.py（待实现，F-16）
+
+`main.py` 暴露单一异步函数 `run_review_pipeline`，按固定顺序调用 pipeline 各组件。
+
+```python
+# 输入
+class ReviewRequest:
+    base: str | None            # Git base commit，默认取 GIT_BASE 环境变量
+    target: str | None          # Git target commit
+    staged_only: bool = False   # 仅 staged 变更
+    file_filter: str | None     # 文件过滤 glob
+    pr_text: str | None         # PR 描述文本（可选，无 PR 则传 None）
+    max_debate_rounds: int = 3  # 覆盖 config 默认值
+    confidence_threshold: float = 0.6
+
+# 输出
+class ReviewResponse:
+    verdict: Verdict                       # 最终裁决
+    debate_records: list[DebateRecord]     # 完整辩论记录
+    review_result: ParallelReviewResult    # 并行评审原始结果
+    report_markdown: str                   # MD 格式报告
+    report_html: str                       # HTML 格式报告
+    findings_json: str                     # findings.json 内容
+    duration_seconds: float                # 总耗时
+
+async def run_review_pipeline(request: ReviewRequest) -> ReviewResponse
+```
+
+**编排流程**：
+1. `git_diff()` → raw diff
+2. `parse_diff()` → `list[DiffChunk]`；`parse_pr_description()` → `PRContext`
+3. 前置 guardrail：`scan_secrets()` + `scan_risk_signals()` → 结果注入 reviewer prompt
+4. `ParallelReviewManager.run_all()` → `list[Finding]`
+5. `run_debate_loop()` → `list[DebateRecord]`
+6. `merge_similar_findings()` → `list[MergeRecord]`
+7. `make_final_verdict()` → `Verdict`
+8. `generate_report()` → 落盘到 `OUTPUT_DIR`
+
+**错误处理矩阵**：
+
+| 错误场景 | 处理策略 |
+|----------|----------|
+| 缺少 base/target 且无环境变量 | 抛出 `ValueError`，不启动流程 |
+| `OUTPUT_DIR` 不存在 | 自动创建目录 |
+| 单个 reviewer 超时/异常 | 不影响其他 reviewer（已实现） |
+| prosecutor/defender 异常 | 回退默认值（已实现） |
+| 空 diff | 跳过评审，返回空结果（已实现） |
+
 ---
 
 ## 内部实现架构
@@ -158,3 +206,7 @@ pipeline/
 | `tools.diff_parser` | 单向依赖 | 导入 DiffChunk 类型 | Python dataclass |
 | `tools.pr_parser` | 单向依赖 | 导入 PRContext 类型 | Python dataclass |
 | `logger` | 单向依赖 | 获取日志器 | Python module |
+
+## 常见错误与解决方案
+
+> 完整记录参见 `docs/errors-and-resolutions.md` §3。

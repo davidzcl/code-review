@@ -11,7 +11,10 @@
 
 from __future__ import annotations
 
+import datetime
 import logging
+import os
+import re
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -25,6 +28,7 @@ from config import (
     LOG_FORMAT,
     LOG_LEVEL,
     LOG_MAX_BYTES,
+    LOG_RETENTION_DAYS,
 )
 
 
@@ -43,13 +47,25 @@ LEVEL_MAP: Dict[str, int] = {
 def _resolve_log_dir() -> Path:
     """确定日志目录路径"""
     if LOG_DIR:
+        os.makedirs(LOG_DIR, exist_ok=True)
         return Path(LOG_DIR).resolve()
+    os.makedirs("logs", exist_ok=True)
     return Path.cwd() / "logs"
 
 
 def _ensure_dir(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+class LevelFilter(logging.Filter):
+    def __init__(self, min_level: int, max_level: int) -> None:
+        super().__init__()
+        self._min = min_level
+        self._max = max_level
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return self._min <= record.levelno <= self._max
 
 
 class ReviewLogger:
@@ -88,7 +104,7 @@ class ReviewLogger:
             )
 
             self._root_logger = logging.getLogger("review")
-            self._root_logger.setLevel(level)
+            self._root_logger.setLevel(logging.DEBUG)  # 根 logger 调为最低，由 handler 各自过滤
             self._root_logger.handlers.clear()
             self._root_logger.propagate = False
 
@@ -97,19 +113,71 @@ class ReviewLogger:
             console_handler.setFormatter(formatter)
             self._root_logger.addHandler(console_handler)
 
-            file_handler = RotatingFileHandler(
-                filename=str(log_dir / "review.log"),
+            # 全量 error.log - RotatingFileHandler，仅 ERROR / CRITICAL
+            error_handler = RotatingFileHandler(
+                filename=str(log_dir / "error.log"),
                 maxBytes=LOG_MAX_BYTES,
                 backupCount=LOG_BACKUP_COUNT,
                 encoding="utf-8",
             )
-            file_handler.setLevel(level)
-            file_handler.setFormatter(formatter)
-            self._root_logger.addHandler(file_handler)
+            error_handler.setLevel(logging.DEBUG)
+            error_handler.setFormatter(formatter)
+            error_handler.addFilter(LevelFilter(logging.ERROR, logging.CRITICAL))
+            self._root_logger.addHandler(error_handler)
+
+            # 全量 info.log - RotatingFileHandler，仅 DEBUG / INFO / WARNING
+            info_handler = RotatingFileHandler(
+                filename=str(log_dir / "info.log"),
+                maxBytes=LOG_MAX_BYTES,
+                backupCount=LOG_BACKUP_COUNT,
+                encoding="utf-8",
+            )
+            info_handler.setLevel(logging.DEBUG)
+            info_handler.setFormatter(formatter)
+            info_handler.addFilter(LevelFilter(0, logging.WARNING))
+            self._root_logger.addHandler(info_handler)
+
+            # 每日 error.{date}.log - FileHandler，仅 ERROR / CRITICAL
+            today = datetime.date.today().isoformat()
+            error_daily = logging.FileHandler(
+                filename=str(log_dir / f"error.{today}.log"),
+                encoding="utf-8",
+            )
+            error_daily.setLevel(logging.DEBUG)
+            error_daily.setFormatter(formatter)
+            error_daily.addFilter(LevelFilter(logging.ERROR, logging.CRITICAL))
+            self._root_logger.addHandler(error_daily)
+
+            # 每日 info.{date}.log - FileHandler，仅 DEBUG / INFO / WARNING
+            info_daily = logging.FileHandler(
+                filename=str(log_dir / f"info.{today}.log"),
+                encoding="utf-8",
+            )
+            info_daily.setLevel(logging.DEBUG)
+            info_daily.setFormatter(formatter)
+            info_daily.addFilter(LevelFilter(0, logging.WARNING))
+            self._root_logger.addHandler(info_daily)
+
+            self._cleanup_daily_logs(log_dir, LOG_RETENTION_DAYS)
 
             self._level = level
             self._log_dir = log_dir
             self._initialized = True
+
+    @staticmethod
+    def _cleanup_daily_logs(log_dir: Path, retention_days: int) -> None:
+        cutoff = datetime.date.today() - datetime.timedelta(days=retention_days)
+        pattern = re.compile(r"^(error|info)\.(\d{4}-\d{2}-\d{2})\.log$")
+        for f in log_dir.iterdir():
+            m = pattern.match(f.name)
+            if not m:
+                continue
+            try:
+                file_date = datetime.date.fromisoformat(m.group(2))
+                if file_date < cutoff:
+                    f.unlink()
+            except (ValueError, PermissionError, OSError):
+                pass
 
     @property
     def log_dir(self) -> Path:

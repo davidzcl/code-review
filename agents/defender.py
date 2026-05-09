@@ -15,7 +15,7 @@ from agentscope.agent import ReActAgent
 from agentscope.model import ChatModelBase
 from agentscope.formatter import FormatterBase
 from agentscope.tool import Toolkit
-from agentscope.memory import InMemoryMemory
+from agentscope.memory import MemoryBase, InMemoryMemory
 
 from agents.base import AgentInitializationError
 from agents.prosecutor import Challenge
@@ -60,7 +60,7 @@ class DefenderAgent(ReActAgent):
         model: ChatModelBase,
         formatter: FormatterBase,
         toolkit: Optional[Toolkit] = None,
-        memory: Optional[InMemoryMemory] = None,
+        memory: Optional[MemoryBase] = None,
         max_iters: int = 10,
     ) -> None:
         if not name or not name.strip():

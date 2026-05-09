@@ -7,7 +7,18 @@
 - 测试 fixtures（样本 diff、mock 响应等）
 - 端到端测试
 
-**边界**：test/ 不包含任何生产代码。每个验证脚本对应 features.md 中的一条功能项。
+**边界**：test/ 不包含任何生产代码。
+
+---
+
+## 强制规范（LLM 生成测试时必须遵守）
+
+1. **新建测试必须使用 pytest + pytest-asyncio**，严禁创建新的 `verify_*.py` 脚本
+2. **所有 LLM 调用必须 mock**，不触发真实 API 调用
+3. **异步函数必须加 `@pytest.mark.asyncio`** 标记
+4. **测试文件命名**：`test_<模块名>.py`，如 `test_reviewer_agent.py`
+5. **fixture 定义在 conftest.py**，测试文件中不定义可复用 mock
+6. **现有 `verify_*.py` 脚本保持不变**，不迁移、不修改
 
 ---
 
@@ -16,83 +27,126 @@
 ```
 test/
 ├── __init__.py
-├── fixtures/                      # 测试数据
-│   ├── sample_simple.diff         # 简单 diff 样本（单文件）
-│   ├── sample_multi_file.diff     # 多文件 diff 样本
-│   ├── sample_pr.md               # 示例 PR 描述
-│   └── mock_responses/            # Mock LLM 响应
-│       └── reviewer_findings.json
-├── verify_model_registry.py       # [PASS] F-01
-├── verify_diff_parser.py          # [PASS] F-03
-├── verify_pr_parser.py            # [PASS] F-04
-├── verify_reviewer_agent.py       # [PENDING] F-05
-├── verify_parallel_review.py      # [PENDING] F-06
-├── verify_debate_loop.py          # [PENDING] F-07
-├── verify_prosecutor.py           # [PENDING] F-08
-├── verify_defender.py             # [PENDING] F-09
-├── verify_issue_merger.py         # [PENDING] F-10
-├── verify_verdict.py              # [PENDING] F-11
-├── verify_report_md.py            # [PENDING] F-12
-├── verify_report_html.py          # [PENDING] F-13
-├── verify_evaluator.py            # [PENDING] F-14
-└── verify_e2e.py                  # [PENDING] F-15
+├── conftest.py                  # pytest fixture 中心（待创建）
+├── fixtures/                    # 测试数据
+│   ├── sample_simple.diff
+│   ├── sample_multi_file.diff
+│   └── sample_pr.md
+├── verify_*.py                  # 现有验证脚本（保持不变）
+└── test_*.py                    # 新增 pytest 测试（待创建）
 ```
 
 ---
 
-## 验证脚本规范
+## 双框架并存策略
 
-每个 `verify_*.py` 脚本必须：
+| 维度 | verify_*.py（旧） | test_*.py（新） |
+|------|-------------------|----------------|
+| 用途 | 快速功能验证、CI 门禁 | 完整单元测试、回归测试 |
+| 运行命令 | `python test/verify_xxx.py` | `python -m pytest test/test_*.py -v` |
+| 异步支持 | 手动 `asyncio.run()` | `@pytest.mark.asyncio` |
+| Mock 策略 | 内联定义 | conftest.py fixture 注入 |
+| 状态 | 冻结，不再新增 | 新增测试的唯一入口 |
 
-1. 在 `if __name__ == "__main__"` 下执行
-2. 使用 `assert` 语句验证功能正确性
-3. 成功时 `exit(0)`，失败时 `exit(1)`
-4. 输出格式：`[PASS] / [FAIL] <描述>`
-5. 使用 mock 模型，不触发真实 API 调用
+---
 
-**模板**：
+## 依赖版本
+
+| 包 | 版本 | 用途 |
+|------|------|------|
+| `pytest` | 9.0.2 | 测试框架核心 |
+| `pytest-asyncio` | 配套 | 异步测试标记与事件循环管理 |
+| `pytest-mock` | 配套 | `mocker` fixture，简化 mock 创建 |
+
+---
+
+## pytest 配置
+
+项目根目录需包含 `pytest.ini` 或 `pyproject.toml` 配置：
+
+```ini
+# pytest.ini
+[pytest]
+testpaths = test
+python_files = test_*.py
+python_classes = Test*
+python_functions = test_*
+asyncio_mode = auto
+```
+
+`asyncio_mode = auto` 是关键配置，使 `async def` 测试函数自动识别为异步测试。
+
+---
+
+## conftest.py Fixture 规范
+
+`test/conftest.py` 定义全局 fixture，作用域覆盖整个 `test/` 目录。
+
+**核心 fixture 清单**：
+
+| Fixture | 返回值 | 用途 |
+|---------|--------|------|
+| `mock_model` | ChatModelBase 实例 | 模拟 LLM 响应 |
+| `mock_formatter` | FormatterBase 实例 | 模拟消息格式化 |
+| `sample_diff` | str | 加载 sample_simple.diff |
+| `sample_diff_multi` | str | 加载 sample_multi_file.diff |
+| `pr_context` | PRContext 实例 | 构造 PR 上下文对象 |
+| `diff_chunks` | List[DiffChunk] | 解析后的 diff 块列表 |
+
+**MockModel 响应模板**：
+- 正常：返回结构化 Finding JSON 列表
+- 空：`[]`
+- 异常：非 JSON 字符串（测试解析错误处理）
+
+---
+
+## 测试用例编写模板
+
 ```python
-"""F-XX: <功能名称> 验证脚本"""
-import sys
-sys.path.insert(0, "d:/project/code-review")
-
+import pytest
 from agentscope.model import ChatModelBase, ChatResponse
+from agentscope.message import TextBlock
 
-# Mock 模型用于测试
-class MockModel(ChatModelBase):
-    def __init__(self):
-        super().__init__(model_name="mock", stream=False)
-    async def __call__(self, *args, **kwargs):
-        return ChatResponse(content=[])
+@pytest.mark.asyncio
+async def test_<功能描述>(mock_model, mock_formatter):
+    """测试 docstring：一句话描述测试目标。"""
+    # 1. 构造输入
+    # 2. 调用被测函数
+    # 3. 断言输出
+```
 
-def test_something():
-    # 测试逻辑
-    assert True, "测试失败时输出此消息"
-    print("[PASS] 测试项描述")
+**组织原则**：
+1. 相关测试方法归入 `Test<类名>` 类
+2. 多输入场景使用 `@pytest.mark.parametrize`
+3. 一个测试只验证一个行为
 
-if __name__ == "__main__":
-    test_something()
-    print("\n全部验证通过!")
+---
+
+## 运行命令
+
+```bash
+# 全部 pytest 测试
+python -m pytest test/test_*.py -v
+
+# 单个文件
+python -m pytest test/test_reviewer_agent.py -v
+
+# 快速失败
+python -m pytest test/test_*.py -x
+
+# 覆盖率报告
+python -m pytest --cov=agents --cov=pipeline --cov=tools --cov-report=html:test/htmlcov test/test_*.py
 ```
 
 ---
 
-## Fixtures 设计要求
+## Fixtures 数据设计要求
 
-### sample_simple.diff
-- 单文件单函数变更
-- 包含：1 个 addition、1 个 deletion
-- 用于 diff_parser 基础测试
-
-### sample_multi_file.diff
-- 3 个文件变更
-- 包含：新增文件、修改文件、删除文件
-- 用于 diff_parser 多文件边界条件测试
-
-### sample_pr.md
-- 标准 PR 模板（中文）
-- 包含：标题、描述、标签、分支信息
-- 用于 pr_parser 测试
+| 文件 | 要求 |
+|------|------|
+| `sample_simple.diff` | 单文件单函数变更，1 addition + 1 deletion |
+| `sample_multi_file.diff` | 3 文件变更：新增 + 修改 + 删除 |
+| `sample_pr.md` | 标准 PR 模板（中文），含标题、描述、标签 |
 
 ---
 
@@ -100,8 +154,15 @@ if __name__ == "__main__":
 
 | 依赖 | 类型 | 说明 |
 |------|------|------|
-| `agents` | 运行时依赖 | 被测模块 |
-| `tools` | 运行时依赖 | 被测模块 |
-| `pipeline` | 运行时依赖 | 被测模块 |
-| `skills` | 运行时依赖 | 被测模块 |
-| `fixtures/` | 数据依赖 | 测试样本数据 |
+| `agents` | 被测模块 | — |
+| `tools` | 被测模块 | — |
+| `pipeline` | 被测模块 | — |
+| `fixtures/` | 数据依赖 | 测试样本 |
+| `pytest` | 测试框架 | 9.0.2 |
+| `pytest-asyncio` | 测试插件 | 异步测试支持 |
+
+---
+
+## 常见错误与解决方案
+
+> 参见 `docs/errors-and-resolutions.md` §测试部分。

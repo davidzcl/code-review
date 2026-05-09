@@ -172,7 +172,7 @@ class PRParseError(Exception):
     """PR 解析异常。"""
 ```
 
-### 4. 报告生成器（待实现）
+### 4. 报告生成器（已完成）
 
 ```python
 def generate_report(
@@ -417,11 +417,11 @@ tools/
 ├── logger.py             # 全局日志系统（已实现）
 ├── test_runner.py        # 安全测试执行（已实现）
 ├── tools.py              # Git 只读操作封装（已实现）
-├── toolkit.py            # Toolkit 注册与调用调度（待实现）
+├── toolkit.py            # Toolkit 注册与调用调度（已完成）
 ├── diff_parser.py        # diff 解析（已实现）
 ├── pr_parser.py          # PR 描述解析（已实现）
-├── report_writer.py      # 报告生成（待实现）
-├── secret_scanner.py     # 密钥扫描（待实现）
+├── report_writer.py      # 报告生成（已完成）
+├── secret_scanner.py     # 密钥扫描（已完成）
 ├── search.py             # 代码搜索（已实现）
 ├── risk_scan.py          # 风险分析（已实现）
 ```
@@ -492,6 +492,7 @@ tools/
 |------|------|----------|----------|
 | `config.py` | 单向依赖 | 导入路径、限制常量 | Python 模块属性 |
 | `tools.logger` | 工具依赖 | 各模块通过 logger.get_logger() 获取子 logger | logging.Logger |
-| `tools.tools` | 功能依赖 | diff_parser/report_writer 导入 dataclass | Python dataclass |
-| `skills.debate_loop` | 被调用方 | 接收 DebateRecord | Python dataclass → 模板变量 |
-| `agents.judge` | 被调用方 | 接收 Verdict | Python dataclass → 模板变量 |
+
+## 常见错误与解决方案
+
+> 完整记录参见 `docs/errors-and-resolutions.md` §4 + §6。
