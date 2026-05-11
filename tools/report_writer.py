@@ -12,7 +12,7 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
-from agents.reviewer import Finding
+from agents.finding import Finding
 from pipeline.verdict import Verdict
 from pipeline.issue_merger import MergeRecord
 from tools.pr_parser import PRContext
@@ -38,17 +38,20 @@ def _severity_label(severity: str) -> str:
     return labels.get(severity, severity)
 
 
-def _build_overview(verdict: Verdict, pr_context: PRContext, diff_summary: str) -> str:
+def _build_overview(verdict: Verdict, pr_context: Optional[PRContext], diff_summary: str) -> str:
     """构建评审概览部分。"""
     lines: List[str] = []
     lines.append("## 评审概览")
     lines.append("")
-    if pr_context.title:
-        lines.append(f"- **PR 标题**: {_escape_md(pr_context.title)}")
-    if pr_context.author:
-        lines.append(f"- **作者**: {_escape_md(pr_context.author)}")
-    if pr_context.head_branch or pr_context.base_branch:
-        lines.append(f"- **分支**: {_escape_md(pr_context.head_branch or '')} → {_escape_md(pr_context.base_branch or '')}")
+    if pr_context is None:
+        lines.append("- **PR 标题**: （未提供 PR 描述）")
+    else:
+        if pr_context.title:
+            lines.append(f"- **PR 标题**: {_escape_md(pr_context.title)}")
+        if pr_context.author:
+            lines.append(f"- **作者**: {_escape_md(pr_context.author)}")
+        if pr_context.head_branch or pr_context.base_branch:
+            lines.append(f"- **分支**: {_escape_md(pr_context.head_branch or '')} → {_escape_md(pr_context.base_branch or '')}")
     total = len(verdict.findings)
     lines.append(f"- **发现数量**: {total} 个")
     severity_counts: Dict[str, int] = {}
@@ -127,10 +130,11 @@ def _build_findings(verdict: Verdict) -> str:
     return "\n".join(lines)
 
 
-def _generate_markdown(verdict: Verdict, pr_context: PRContext, diff_summary: str) -> str:
+def _generate_markdown(verdict: Verdict, pr_context: Optional[PRContext], diff_summary: str) -> str:
     """生成 Markdown 格式报告。"""
     parts: List[str] = []
-    parts.append(f"# PR Review Report: {_escape_md(pr_context.title or '未命名')}")
+    title = _escape_md(pr_context.title) if pr_context and pr_context.title else "未命名"
+    parts.append(f"# PR Review Report: {title}")
     parts.append("")
     parts.append(_build_overview(verdict, pr_context, diff_summary))
     parts.append("")
@@ -170,14 +174,14 @@ def _generate_html(verdict: Verdict, pr_context: PRContext, diff_summary: str) -
     return "\n".join(html_lines)
 
 
-def _generate_json(verdict: Verdict, pr_context: PRContext, diff_summary: str) -> str:
+def _generate_json(verdict: Verdict, pr_context: Optional[PRContext], diff_summary: str) -> str:
     """生成 JSON 格式报告。"""
     data: Dict[str, Any] = {
         "report": {
-            "title": pr_context.title or "",
-            "author": pr_context.author or "",
-            "base_branch": pr_context.base_branch or "",
-            "head_branch": pr_context.head_branch or "",
+            "title": pr_context.title if pr_context else "",
+            "author": pr_context.author if pr_context else "",
+            "base_branch": pr_context.base_branch if pr_context else "",
+            "head_branch": pr_context.head_branch if pr_context else "",
         },
         "verdict": {
             "summary": verdict.summary,
@@ -215,7 +219,7 @@ def _generate_json(verdict: Verdict, pr_context: PRContext, diff_summary: str) -
 
 def generate_report(
     verdict: Verdict,
-    pr_context: PRContext,
+    pr_context: Optional[PRContext],
     diff_summary: str = "",
     output_format: str = "markdown",
 ) -> str:
@@ -223,7 +227,7 @@ def generate_report(
 
     Args:
         verdict: 最终裁决结果。
-        pr_context: PR 上下文信息。
+        pr_context: PR 上下文信息（可能为 None）。
         diff_summary: 代码变更摘要文本。
         output_format: 输出格式（"markdown" | "html" | "json"）。
 

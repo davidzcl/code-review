@@ -19,45 +19,13 @@ from agentscope.model import ChatModelBase
 from agentscope.tool import Toolkit
 
 from agents.base import AgentInitializationError
+from agents.formatter_registry import create_formatter, infer_formatter_type
+from agents.finding import Finding
 from logger import logger
 from tools.diff_parser import DiffChunk
 from tools.pr_parser import PRContext
 
 _reviewer_logger = logger.get_logger("agents.reviewer")
-
-
-_SEVERITY_VALUES = {"critical", "important", "minor"}
-
-
-class Finding(BaseModel):
-    """评审发现的数据结构。
-
-    表示评审者在代码审查过程中发现的一个具体问题。
-
-    继承 pydantic.BaseModel，内建类型校验和 JSON schema 生成，
-    可与 AgentScope 的 structured_model 机制直接集成。
-    """
-
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    reviewer: str = ""
-    role: str = ""
-    severity: str = "minor"
-    file_path: str = ""
-    line_range: Tuple[int, int] = (0, 0)
-    title: str = ""
-    description: str = ""
-    suggestion: str = ""
-    confidence: float = 0.0
-    evidence: List[str] = Field(default_factory=list)
-
-    @field_validator("severity")
-    @classmethod
-    def _check_severity(cls, v: str) -> str:
-        if v not in _SEVERITY_VALUES:
-            raise ValueError(
-                f"无效的严重级别: '{v}'，有效值: {_SEVERITY_VALUES}"
-            )
-        return v
 
 
 class ReviewerAgent(ReActAgent):
@@ -83,7 +51,7 @@ class ReviewerAgent(ReActAgent):
         role: str,
         sys_prompt: str,
         model: ChatModelBase,
-        formatter: FormatterBase,
+        formatter: Optional[FormatterBase] = None,
         toolkit: Optional[Toolkit] = None,
         memory: Optional[InMemoryMemory] = None,
         max_iters: int = 10,
@@ -96,16 +64,12 @@ class ReviewerAgent(ReActAgent):
             raise AgentInitializationError(
                 f"model 必须是 ChatModelBase 实例，收到: {type(model)}"
             )
-        if not isinstance(formatter, FormatterBase):
-            raise AgentInitializationError(
-                f"formatter 必须是 FormatterBase 实例，收到: {type(formatter)}"
-            )
 
         super().__init__(
             name=name,
             sys_prompt=sys_prompt,
             model=model,
-            formatter=formatter,
+            formatter=formatter or create_formatter(infer_formatter_type(model)),
             toolkit=toolkit or Toolkit(),
             memory=memory or InMemoryMemory(),
             max_iters=max_iters,
@@ -140,19 +104,16 @@ class ReviewerAgent(ReActAgent):
         """
         lines: List[str] = []
         lines.append(f"## PR 信息")
-        lines.append(f"- 标题: {pr_context.title}")
-        if pr_context.description:
+        if pr_context:
+            lines.append(f"- 标题: {pr_context.title}")
             lines.append(f"- 描述: {pr_context.description}")
-        if pr_context.author:
             lines.append(f"- 作者: {pr_context.author}")
-        if pr_context.labels:
             lines.append(f"- 标签: {', '.join(pr_context.labels)}")
-        if pr_context.base_branch:
             lines.append(f"- 目标分支: {pr_context.base_branch}")
-        if pr_context.head_branch:
             lines.append(f"- 源分支: {pr_context.head_branch}")
-        if pr_context.changed_files_summary:
             lines.append(f"- 变更概要: {pr_context.changed_files_summary}")
+        else:
+            lines.append(f"- 无 PR 信息")
 
         lines.append("")
         lines.append(f"## 代码变更 (共 {len(diff_chunks)} 个变更块)")

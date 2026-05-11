@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import Any, List
+from typing import Any, List, Optional
 import uuid
 
 from pydantic import BaseModel, Field
@@ -20,19 +20,23 @@ from agentscope.memory import MemoryBase, InMemoryMemory
 
 from agents.base import AgentInitializationError
 
+from agents.formatter_registry import create_formatter, infer_formatter_type
 from agents.reviewer import Finding
 from logger import logger
 
 _prosecutor_logger = logger.get_logger("agents.prosecutor")
 
+class ChallengeReply(BaseModel):
+    """质疑回复的数据结构。"""
+    is_valid: bool = Field(default=True, description="是否有效")
+    reasons: List[str] = Field(default_factory=list, description="质疑理由")
+    confidence: float = Field(default=0.0, description="置信度")
 
 class Challenge(BaseModel):
     """质疑结果的数据结构。"""
 
     finding_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    is_valid: bool = True
-    reasons: List[str] = Field(default_factory=list)
-    confidence: float = 0.0
+    reply: ChallengeReply = Field(default_factory=ChallengeReply)
 
 
 class ProsecutorAgent(ReActAgent):
@@ -51,7 +55,7 @@ class ProsecutorAgent(ReActAgent):
         role: str,
         sys_prompt: str,
         model: ChatModelBase,
-        formatter: FormatterBase,
+        formatter: Optional[FormatterBase] = None,
         toolkit: Optional[Toolkit] = None,
         memory: Optional[MemoryBase] = None,
         max_iters: int = 10,
@@ -64,16 +68,12 @@ class ProsecutorAgent(ReActAgent):
             raise AgentInitializationError(
                 f"model 必须是 ChatModelBase 实例，收到: {type(model)}"
             )
-        if not isinstance(formatter, FormatterBase):
-            raise AgentInitializationError(
-                f"formatter 必须是 FormatterBase 实例，收到: {type(formatter)}"
-            )
 
         super().__init__(
             name=name,
             sys_prompt=sys_prompt,
             model=model,
-            formatter=formatter,
+            formatter=formatter or create_formatter(infer_formatter_type(model)),
             toolkit=toolkit or Toolkit(),
             memory=memory or InMemoryMemory(),
             max_iters=max_iters,
@@ -111,7 +111,7 @@ class ProsecutorAgent(ReActAgent):
         msg = Msg(self.name, prompt, "user")
 
         try:
-            response = await self.reply(msg, structured_model=Challenge)
+            response = await self.reply(msg, structured_model=ChallengeReply)
             metadata = response.metadata or {}
             challenge = Challenge(
                 finding_id=finding.id,

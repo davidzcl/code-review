@@ -20,20 +20,24 @@ from agentscope.memory import MemoryBase, InMemoryMemory
 from agents.base import AgentInitializationError
 from agents.prosecutor import Challenge
 from agents.reviewer import Finding
+from agents.formatter_registry import create_formatter, infer_formatter_type
 from logger import logger
 
 _defender_logger = logger.get_logger("agents.defender")
 
+class DefenseReply(BaseModel):
+    """辩护回复的数据结构。"""
+    finding_stands: bool = Field(default=True, description="是否支持该发现")
+    counter_evidence: List[str] = Field(default_factory=list, description="反证证据")
+    revised_severity: Optional[str] = Field(default=None, description="修订后的严重程度")
+    revised_confidence: Optional[float] = Field(default=None, description="修订置信度")
 
 class Defense(BaseModel):
     """辩护结果的数据结构。"""
 
     finding_id: str = ""
     challenge_id: str = ""
-    finding_stands: bool = True
-    counter_evidence: List[str] = Field(default_factory=list)
-    revised_severity: Optional[str] = None
-    revised_confidence: Optional[float] = None
+    reply: DefenseReply = Field(default_factory=DefenseReply)
 
 
 class DefenderAgent(ReActAgent):
@@ -58,7 +62,7 @@ class DefenderAgent(ReActAgent):
         role: str,
         sys_prompt: str,
         model: ChatModelBase,
-        formatter: FormatterBase,
+        formatter: Optional[FormatterBase] = None,
         toolkit: Optional[Toolkit] = None,
         memory: Optional[MemoryBase] = None,
         max_iters: int = 10,
@@ -71,16 +75,12 @@ class DefenderAgent(ReActAgent):
             raise AgentInitializationError(
                 f"model 必须是 ChatModelBase 实例，收到: {type(model)}"
             )
-        if not isinstance(formatter, FormatterBase):
-            raise AgentInitializationError(
-                f"formatter 必须是 FormatterBase 实例，收到: {type(formatter)}"
-            )
 
         super().__init__(
             name=name,
             sys_prompt=sys_prompt,
             model=model,
-            formatter=formatter,
+            formatter=formatter or create_formatter(infer_formatter_type(model)),
             toolkit=toolkit or Toolkit(),
             memory=memory or InMemoryMemory(),
             max_iters=max_iters,
@@ -141,7 +141,7 @@ class DefenderAgent(ReActAgent):
         msg = Msg(self.name, prompt, "user")
 
         try:
-            response = await self.reply(msg, structured_model=Defense)
+            response = await self.reply(msg, structured_model=DefenseReply)
             metadata = response.metadata or {}
             defense = Defense(
                 finding_id=finding.id,

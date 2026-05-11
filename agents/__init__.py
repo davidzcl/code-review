@@ -10,7 +10,16 @@ from agents.model_registry import (
     is_model_registered,
     ModelRegistryError,
 )
-from agents.reviewer import Finding, ReviewerAgent
+from agents.formatter_registry import (
+    create_formatter,
+    register_formatter,
+    list_registered_formatters,
+    is_formatter_registered,
+    infer_formatter_type,
+    FormatterRegistryError,
+)
+from agents.finding import Finding
+from agents.reviewer import ReviewerAgent
 from agents.prosecutor import ProsecutorAgent, Challenge
 from agents.defender import DefenderAgent, Defense
 from agents.evaluator import EvaluatorAgent, EvaluationResult
@@ -21,6 +30,12 @@ __all__ = [
     "list_registered_models",
     "is_model_registered",
     "ModelRegistryError",
+    "create_formatter",
+    "register_formatter",
+    "list_registered_formatters",
+    "is_formatter_registered",
+    "infer_formatter_type",
+    "FormatterRegistryError",
     "AgentInitializationError",
     "Finding",
     "ReviewerAgent",

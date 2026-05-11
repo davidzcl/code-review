@@ -14,7 +14,7 @@
 
 ## 对外接口定义
 
-### 1. 模型注册与工厂（已完成）
+### 1. 模型注册与工厂
 
 ```python
 # 工厂函数
@@ -35,14 +35,47 @@ class ModelRegistryError(Exception)
 **配置字典格式**：
 ```json
 {
-    "model_type": "dashscope | openai_compatible | ollama | <custom>",
+    "model_type": "dashscope | openai | deepseek | ollama | <custom>",
     "model_name": "qwen-max",
     "stream": true,
     "api_key": "sk-xxx"
 }
 ```
 
-### 2. 评审者 Agent（已完成）
+### 1.5. Formatter 注册与工厂
+
+不同 `model_type` 对应不同的消息格式要求，`formatter_registry.py` 提供基于 `model_type` 的 formatter 自动创建。
+
+```python
+# 工厂函数
+def create_formatter(model_type: str, **kwargs) -> FormatterBase
+
+# 装饰器注册
+@register_formatter("model_type_str")
+class MyFormatter(FormatterBase): ...
+
+# 查询
+def list_registered_formatters() -> list[str]
+def is_formatter_registered(model_type: str) -> bool
+
+# 自推断（无显式 formatter 时根据 model 实例判断）
+# DeepSeek 通过 model_name 中是否包含 "deepseek" 判定
+def infer_formatter_type(model: ChatModelBase) -> str
+
+# 异常
+class FormatterRegistryError(Exception)
+```
+
+**预注册映射**：
+
+| model_type | Model 类 | Formatter 类 |
+|------------|----------|-------------|
+| `dashscope` | `DashScopeChatModel` | `DashScopeChatFormatter` |
+| `openai` | `OpenAIChatModel` | `OpenAIChatFormatter` |
+| `deepseek` | `OpenAIChatModel` | `DeepSeekChatFormatter` |
+| `ollama` | `OllamaChatModel` | `OllamaChatFormatter` |
+
+### 2. 评审者 Agent
 
 ```python
 class ReviewerAgent(ReActAgent):
@@ -55,7 +88,7 @@ class ReviewerAgent(ReActAgent):
     ) -> list[Finding]
 ```
 
-**Finding 数据结构**（已完成）：
+**Finding 数据结构**：
 ```python
 class Finding(BaseModel):
     id: str                    # 唯一标识，自动生成 uuid4
@@ -74,7 +107,7 @@ class AgentInitializationError(Exception):
     """已实现。Agent 初始化失败的异常。"""
 ```
 
-### 3. 辩论循环 Agent（已完成）
+### 3. 辩论循环 Agent
 
 ```python
 class Challenge(BaseModel):
@@ -110,7 +143,7 @@ class DefenderAgent:
     ) -> Defense
 ```
 
-### 4. 质量评估 Agent（已完成）
+### 4. 质量评估 Agent
 
 ```python
 class EvaluationResult(BaseModel):
@@ -123,7 +156,7 @@ class EvaluationResult(BaseModel):
 
 
 class EvaluatorAgent(ReActAgent):
-    """已实现。继承 ReActAgent，对报告进行质量评估。"""
+    """继承 ReActAgent，对报告进行质量评估。"""
 
     async def evaluate(
         self,
@@ -157,6 +190,11 @@ agents/
 │   ├── register_model()  # 装饰器/显式注册
 │   ├── create_model()    # 工厂函数
 │   └── 内置工厂函数
+├── formatter_registry.py # Formatter 注册（已完成）
+│   ├── _FormatterRegistry # 单例注册表
+│   ├── register_formatter()  # 装饰器/显式注册
+│   ├── create_formatter()    # 工厂函数
+│   └── infer_formatter_type() # model 实例 → model_type 推断
 ├── base.py               # 基础异常定义（已完成）
 ├── reviewer.py           # 评审者 agent（已完成）
 │   ├── Finding           # 评审发现数据类
@@ -182,9 +220,10 @@ agents/
 
 ```
 config.py ──→ create_model(config) ──→ ChatModelBase ──→ ReviewerAgent(model)
-                                                       ──→ ProsecutorAgent(model)
-                                                       ──→ DefenderAgent(model)
-                                                       ──→ EvaluatorAgent(model)
+           ──→ create_formatter(model_type) ──→ FormatterBase ──→ ReviewerAgent(formatter)
+                                                       ──→ ProsecutorAgent(model, formatter)
+                                                       ──→ DefenderAgent(model, formatter)
+                                                       ──→ EvaluatorAgent(model, formatter)
 ```
 
 ---

@@ -74,10 +74,6 @@ MAX_SKILL_CHARS = _env_int("MAX_SKILL_CHARS", 12000)
 # ============================================================
 
 DASHSCOPE_API_KEY = _env("DASHSCOPE_API_KEY")
-DASHSCOPE_API_BASE_URL = _env(
-    "DASHSCOPE_API_BASE_URL",
-    "https://dashscope.aliyuncs.com/compatible-mode/v1",
-)
 OPENAI_API_KEY = _env("OPENAI_API_KEY")
 OPENAI_API_BASE_URL = _env("OPENAI_API_BASE_URL", "https://api.openai.com/v1")
 
@@ -88,13 +84,14 @@ OPENAI_API_BASE_URL = _env("OPENAI_API_BASE_URL", "https://api.openai.com/v1")
 
 DEFAULT_DASHSCOPE_MODEL_CONFIG: Dict[str, Any] = {
     "model_type": "dashscope",
-    "model_name": "qwen-max",
+    "model_name": "qwen3.6-flash",
     "stream": True,
     "api_key": DASHSCOPE_API_KEY,
+    "multimodality": True,
 }
 
 DEFAULT_OPENAI_MODEL_CONFIG: Dict[str, Any] = {
-    "model_type": "openai_compatible",
+    "model_type": "openai",
     "model_name": "gpt-4o",
     "stream": True,
     "api_key": OPENAI_API_KEY,

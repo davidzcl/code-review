@@ -407,6 +407,7 @@ def static_analysis(
 def scan_risk_signals(
     base: Optional[str] = None,
     target: Optional[str] = None,
+    cwd: Optional[str] = None,
 ) -> Dict[str, List[RiskFinding]]:
     """扫描 diff 中的风险信号和测试覆盖缺口。
 
@@ -420,6 +421,7 @@ def scan_risk_signals(
     Args:
         base:  基准分支/commit
         target: 目标分支/commit
+        cwd: 执行目录（可选）。
 
     Returns:
         {
@@ -429,7 +431,7 @@ def scan_risk_signals(
     """
     _risk_logger.info("开始风险扫描 base=%s target=%s", base, target)
 
-    diff_text = git_diff(base, target)
+    diff_text = git_diff(base, target, cwd=cwd)
     added_lines = _parse_diff_added_lines(diff_text)
     _risk_logger.info("解析新增行: %d 行", len(added_lines))
 

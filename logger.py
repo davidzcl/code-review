@@ -209,6 +209,16 @@ class ReviewLogger:
     def critical(self, message: str, *args, **kwargs) -> None:
         self._root_logger.critical(message, *args, **kwargs)
 
+    def setup_logger(self, level: str = "INFO") -> None:
+        """外部统一初始化入口。
+
+        实际初始化已在 __init__ 中完成，此方法仅动态调整日志级别。
+
+        Args:
+            level: 日志级别 DEBUG / INFO / WARNING / ERROR / CRITICAL
+        """
+        self.set_level(level)
+
     def set_level(self, level_name: str) -> None:
         """运行时动态调整日志级别
 

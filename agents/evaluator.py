@@ -7,7 +7,7 @@ AI 质量评估模块
 
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -19,6 +19,7 @@ from agentscope.tool import Toolkit
 from agentscope.memory import InMemoryMemory
 
 from agents.base import AgentInitializationError
+from agents.formatter_registry import create_formatter, infer_formatter_type
 from pipeline.verdict import Verdict
 from tools.pr_parser import PRContext
 from logger import logger
@@ -72,7 +73,7 @@ class EvaluatorAgent(ReActAgent):
         self,
         name: str,
         model: ChatModelBase,
-        formatter: FormatterBase,
+        formatter: Optional[FormatterBase] = None,
         sys_prompt: str = "",
         toolkit: Toolkit | None = None,
         memory: InMemoryMemory | None = None,
@@ -84,10 +85,6 @@ class EvaluatorAgent(ReActAgent):
             raise AgentInitializationError(
                 f"model 必须是 ChatModelBase 实例，收到: {type(model)}"
             )
-        if not isinstance(formatter, FormatterBase):
-            raise AgentInitializationError(
-                f"formatter 必须是 FormatterBase 实例，收到: {type(formatter)}"
-            )
 
         final_sys_prompt = sys_prompt or _EVALUATOR_SYS_PROMPT
 
@@ -95,7 +92,7 @@ class EvaluatorAgent(ReActAgent):
             name=name,
             sys_prompt=final_sys_prompt,
             model=model,
-            formatter=formatter,
+            formatter=formatter or create_formatter(infer_formatter_type(model)),
             toolkit=toolkit or Toolkit(),
             memory=memory or InMemoryMemory(),
             max_iters=max_iters,

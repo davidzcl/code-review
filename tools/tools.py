@@ -72,6 +72,7 @@ def git_diff(
     target: Optional[str] = None,
     staged_only: bool = False,
     file_filter: Optional[str] = None,
+    cwd: Optional[str] = None,
 ) -> str:
     """获取 Git 仓库差异内容
 
@@ -80,6 +81,7 @@ def git_diff(
         target:      目标 commit/tag，默认从 GIT_TARGET 环境变量读取
         staged_only: 是否仅显示已暂存（staged）的变更
         file_filter: 文件路径过滤
+        cwd:         执行目录，默认当前工作区
 
     Returns:
         unified diff 原始字符串
@@ -105,7 +107,7 @@ def git_diff(
     if target:
         args.append(target)
 
-    result = _run_git(args)
+    result = _run_git(args, cwd)
     if len(result) > MAX_DIFF_CHARS:
         result = result[:MAX_DIFF_CHARS] + f"\n... [截断于 {MAX_DIFF_CHARS:,} chars]"
         _tools_logger.warning("diff 输出已截断 (%d chars)", MAX_DIFF_CHARS)

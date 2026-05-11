@@ -7,7 +7,7 @@ sys.path.insert(0, r"d:\project\code-review")
 from typing import Any, List
 
 from agents import Finding, ProsecutorAgent, Challenge
-from agents.reviewer import _SEVERITY_VALUES
+from agents.finding import _SEVERITY_VALUES
 
 from agentscope.model import ChatModelBase, ChatResponse
 from agentscope.message import TextBlock, ToolUseBlock

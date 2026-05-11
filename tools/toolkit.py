@@ -5,8 +5,6 @@
 供 ReviewerAgent 在评审前调用，结果注入 sys_prompt。
 """
 
-from __future__ import annotations
-
 from typing import Any, Dict, List, Optional
 
 from agentscope.message import TextBlock
@@ -55,6 +53,7 @@ def tool_scan_risk_signals(
     base: str = "",
     target: str = "",
     diff_text: str = "",
+    cwd: Optional[str] = None,
 ) -> ToolResponse:
     """扫描代码变更中的风险信号。
 
@@ -62,6 +61,7 @@ def tool_scan_risk_signals(
     匹配 diff 中的新增代码行。
 
     Args:
+        cwd: 执行目录（可选）。
         base: 基准分支/commit。
         target: 目标分支/commit。
         diff_text: 原始 diff 文本（提供此项则跳过 git 调用）。
@@ -73,9 +73,9 @@ def tool_scan_risk_signals(
 
     if not diff_text:
         from tools.tools import git_diff
-        diff_text = git_diff(base, target)
+        diff_text = git_diff(base, target, cwd=cwd)
 
-    result = scan_risk_signals(base, target)
+    result = scan_risk_signals(base, target, cwd=cwd)
 
     signals = result.get("risk_signals", [])
     gaps = result.get("test_gaps", [])
@@ -167,6 +167,7 @@ def build_guardrail_toolkit(
         _toolkit_logger.info("已注册工具: scan_secrets")
         
     tk.register_agent_skill(r"D:\project\code-review\skills\code-review")
+    _toolkit_logger.info("已注册技能: code-review skill")
 
     return tk
 
@@ -175,6 +176,7 @@ def build_guardrail_context(
     diff_text: str,
     base: str = "",
     target: str = "",
+    cwd: Optional[str] = None,
 ) -> str:
     """运行前置 Guardrail 分析并返回上下文文本。
 
@@ -182,13 +184,14 @@ def build_guardrail_context(
 
     Args:
         diff_text: 原始 diff 文本。
-        base: 基准分支。
-        target: 目标分支。
+        cwd: 执行目录（可选）。
+        base: 基准分支/commit。
+        target: 目标分支/commit。
 
     Returns:
         格式化的 Guardrail 上下文文本。
     """
-    risk_result = scan_risk_signals(base, target)
+    risk_result = scan_risk_signals(base, target, cwd=cwd)
     secret_findings = scan_secrets(diff_text)
 
     risk_text = _risk_findings_to_text(risk_result.get("risk_signals", []))

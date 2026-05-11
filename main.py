@@ -13,11 +13,8 @@ import os
 import sys
 from typing import Any, Dict, List, Optional
 
-from dotenv import load_dotenv
-
 from logger import logger
 from config import (
-    PROJECT_ROOT,
     DEFAULT_REVIEWER_PROFILES,
     MAX_DEBATE_ROUNDS,
     MIN_CONFIDENCE_THRESHOLD,
@@ -25,7 +22,6 @@ from config import (
     SUPPORTED_REPORT_FORMATS,
     LOG_LEVEL,
     OUTPUT_DIR,
-    REPORT_FILE,
 )
 
 from agents import (
@@ -58,12 +54,17 @@ def parse_args() -> argparse.Namespace:
         description="PR 评审智能代理系统",
     )
     parser.add_argument(
+        "--repo-dir", type=str, default=None,
+        help="目标 Git 仓库目录（默认: 当前工作目录）",
+    )
+    
+    parser.add_argument(
         "--base", type=str, default="",
-        help="基准分支/commit（默认：空=当前工作区）",
+        help="基准分支/commit",
     )
     parser.add_argument(
         "--target", type=str, default="",
-        help="目标分支/commit（默认：空=当前工作区）",
+        help="目标分支/commit",
     )
     parser.add_argument(
         "--pr-description", type=str, default="",
@@ -149,7 +150,7 @@ async def run_pipeline(args: argparse.Namespace) -> None:
     _main_logger.info("[Phase 0] 加载 PR 信息")
     pr_text = _load_pr_description(args)
     pr_context = parse_pr_description(pr_text) if pr_text else None
-    diff_text = git_diff(args.base, args.target)
+    diff_text = git_diff(args.base, args.target, cwd=args.repo_dir)
     diff_chunks = parse_diff(diff_text)
 
     _main_logger.info(
@@ -167,7 +168,7 @@ async def run_pipeline(args: argparse.Namespace) -> None:
     guardrail_context = ""
     if not args.skip_guardrail:
         _main_logger.info("[Phase 0.5] 前置 Guardrail 扫描")
-        guardrail_context = build_guardrail_context(diff_text, args.base, args.target)
+        guardrail_context = build_guardrail_context(diff_text, args.base, args.target, cwd=args.repo_dir)
         _main_logger.info("Guardrail 完成: %d 字符", len(guardrail_context))
 
     # Phase 1: 创建模型
@@ -177,13 +178,7 @@ async def run_pipeline(args: argparse.Namespace) -> None:
 
     # Phase 2: 创建评审者
     _main_logger.info("[Phase 2] 创建评审者 (%d 个)", len(DEFAULT_REVIEWER_PROFILES))
-    from agentscope.formatter import FormatterBase
 
-    class DefaultFormatter(FormatterBase):
-        async def format(self, *args, **kwargs):
-            return [{"role": "user", "content": "review"}]
-
-    formatter = DefaultFormatter()
     guardrail_toolkit = build_guardrail_toolkit()
 
     reviewers = []
@@ -197,7 +192,6 @@ async def run_pipeline(args: argparse.Namespace) -> None:
             role=profile.role,
             sys_prompt=sys_prompt,
             model=model,
-            formatter=formatter,
             toolkit=guardrail_toolkit,
         )
         reviewers.append(agent)
@@ -228,14 +222,12 @@ async def run_pipeline(args: argparse.Namespace) -> None:
         role="prosecutor",
         sys_prompt="你是一位质疑者，对评审发现提出质疑。",
         model=model,
-        formatter=formatter,
     )
     defender = DefenderAgent(
         name="DefenderAgent",
         role="defender",
         sys_prompt="你是一位辩护者，为评审发现辩护。",
         model=model,
-        formatter=formatter,
     )
 
     debate_records = await run_debate_loop(
@@ -293,7 +285,6 @@ async def run_pipeline(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    load_dotenv(PROJECT_ROOT / ".env")
     logger.setup_logger(level=LOG_LEVEL)
 
     args = parse_args()
