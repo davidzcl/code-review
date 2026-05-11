@@ -27,6 +27,9 @@ from tools.pr_parser import PRContext
 
 _reviewer_logger = logger.get_logger("agents.reviewer")
 
+class ReviewReply(BaseModel):
+    findings: List[Finding] = Field(description="评审发现列表")
+    chunk_index: int = Field(description="当前处理的代码块索引", default=None)
 
 class ReviewerAgent(ReActAgent):
     """代码评审者 Agent 基类。
@@ -153,7 +156,9 @@ class ReviewerAgent(ReActAgent):
         lines.append(
             "每个发现必须包含: "
             "severity(critical|important|minor), file_path, "
-            "title, description, suggestion, confidence(0.0-1.0)"
+            "title, description, suggestion, confidence(0.0-1.0), "
+            "evidence(string[], 引用变更中具体的代码行内容), "
+            "chunk_index(integer, 可选, 对应上方「变更块 N」的序号)"
         )
 
         return "\n".join(lines)
@@ -186,29 +191,87 @@ class ReviewerAgent(ReActAgent):
         from agentscope.message import Msg
 
         msg = Msg(self.name, prompt, "user")
-        reply = await self.reply(msg)
+        reply = await self.reply(msg, structured_model=ReviewReply)
 
-        findings = self._parse_findings(reply)
+        findings = self._parse_findings(reply, diff_chunks)
 
         _reviewer_logger.info(
             "评审完成: reviewer=%s findings=%d",
             self.name, len(findings),
         )
         return findings
+    
+    def _resolve_line_range(
+        self,
+        file_path: str,
+        chunk_index: Optional[int],
+        diff_chunks: List[DiffChunk],
+    ) -> Tuple[int, int]:
+        """从 diff_chunks 中解析行号范围。
 
-    def _parse_findings(self, response: Any) -> List[Finding]:
+        策略:
+            1. chunk_index 有效 → 直接取对应 chunk 范围
+            2. chunk_index 缺失/无效 → 同 file_path 多 chunk 合并范围
+            3. 无匹配 chunk → 返回 (0, 0)
+
+        Args:
+            file_path: LLM 输出的文件路径。
+            chunk_index: LLM 输出的变更块序号（1-based, 可选）。
+            diff_chunks: 完整 DiffChunk 列表。
+
+        Returns:
+            (line_start, line_end)，1-based 闭区间。
+        """
+        if not file_path or not diff_chunks:
+            return (0, 0)
+
+        # 1. chunk_index 优先（LLM 输出的序号为 1-based）
+        if chunk_index is not None:
+            try:
+                idx = int(chunk_index) - 1
+                if 0 <= idx < len(diff_chunks):
+                    c = diff_chunks[idx]
+                    if c.file_path == file_path:
+                        return (c.new_start, c.new_start + c.new_count - 1)
+            except (ValueError, TypeError):
+                pass
+
+        # 2. 退化: 同 file_path 多 chunk 合并
+        matching = [c for c in diff_chunks if c.file_path == file_path]
+        if not matching:
+            return (0, 0)
+
+        if len(matching) == 1:
+            c = matching[0]
+            return (c.new_start, c.new_start + c.new_count - 1)
+
+        min_start = min(c.new_start for c in matching)
+        max_end = max(c.new_start + c.new_count - 1 for c in matching)
+        return (min_start, max_end)
+
+    def _parse_findings(self, response: Any, diff_chunks: List[DiffChunk]) -> List[Finding]:
         """解析模型响应中的评审发现。
 
-        从 ChatResponse 或 Msg 对象中提取 Finding 列表。
+        从 Msg 对象中提取 Finding 列表。
         当模型输出 JSON 格式数据时进行解析。
 
         Args:
-            response: 模型响应（Msg 或 ChatResponse 对象）。
+            response: 模型响应。
 
         Returns:
             解析后的 Finding 列表。
         """
         findings: List[Finding] = []
+        
+        if isinstance(response, ReviewReply):
+            findings = list(response.findings)
+            for f in findings:
+                f.reviewer = self.name
+                f.role = self._role
+                resolved = self._resolve_line_range(f.file_path, None, diff_chunks)
+                if resolved != (0, 0):
+                    f.line_range = resolved
+            return findings
 
         try:
             text = self._extract_text(response)
@@ -231,10 +294,7 @@ class ReviewerAgent(ReActAgent):
                         role=self._role,
                         severity=item.get("severity", "minor"),
                         file_path=item.get("file_path", ""),
-                        line_range=(
-                            item.get("line_start", 0),
-                            item.get("line_end", 0),
-                        ),
+                        line_range=(0, 0),
                         title=item.get("title", ""),
                         description=item.get("description", ""),
                         suggestion=item.get("suggestion", ""),
@@ -243,6 +303,15 @@ class ReviewerAgent(ReActAgent):
                         ),
                         evidence=item.get("evidence", []),
                     )
+                    
+                    resolved_range = self._resolve_line_range(
+                        file_path=finding.file_path,
+                        chunk_index=item.get("chunk_index"),
+                        diff_chunks=diff_chunks,
+                    )
+                    if resolved_range != (0, 0):
+                        finding.line_range = resolved_range
+                    
                     findings.append(finding)
                 except (ValueError, TypeError, KeyError, ValidationError):
                     _reviewer_logger.warning(

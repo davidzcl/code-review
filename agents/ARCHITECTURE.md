@@ -38,7 +38,8 @@ class ModelRegistryError(Exception)
     "model_type": "dashscope | openai | deepseek | ollama | <custom>",
     "model_name": "qwen-max",
     "stream": true,
-    "api_key": "sk-xxx"
+    "api_key": "sk-xxx",
+    "multimodality": False,
 }
 ```
 
