@@ -115,12 +115,14 @@ class ProsecutorAgent(ReActAgent):
             metadata = response.metadata or {}
             challenge = Challenge(
                 finding_id=finding.id,
-                **{k: v for k, v in metadata.items() if k in ("is_valid", "reasons", "confidence")},
+                reply=ChallengeReply(
+                    **{k: v for k, v in metadata.items() if k in ("is_valid", "reasons", "confidence")}
+                ),
             )
 
             _prosecutor_logger.info(
                 "质疑完成: finding_id=%s is_valid=%s confidence=%.2f",
-                finding.id, challenge.is_valid, challenge.confidence,
+                finding.id, challenge.reply.is_valid, challenge.reply.confidence,
             )
             return challenge
         except Exception:

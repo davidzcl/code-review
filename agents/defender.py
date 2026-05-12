@@ -146,14 +146,16 @@ class DefenderAgent(ReActAgent):
             defense = Defense(
                 finding_id=finding.id,
                 challenge_id=challenge.finding_id,
-                **{k: v for k, v in metadata.items()
-                   if k in ("finding_stands", "counter_evidence",
-                            "revised_severity", "revised_confidence")},
+                reply=DefenseReply(
+                    **{k: v for k, v in metadata.items()
+                       if k in ("finding_stands", "counter_evidence",
+                            "revised_severity", "revised_confidence")}
+                ),
             )
 
             _defender_logger.info(
                 "辩护完成: finding_id=%s stands=%s",
-                finding.id, defense.finding_stands,
+                finding.id, defense.reply.finding_stands,
             )
             return defense
         except Exception:
@@ -164,8 +166,10 @@ class DefenderAgent(ReActAgent):
             return Defense(
                 finding_id=finding.id,
                 challenge_id=challenge.finding_id,
-                finding_stands=True,
-                counter_evidence=["辩护者处理异常，默认认定发现成立"],
+                reply=DefenseReply(
+                    finding_stands=True,
+                    counter_evidence=["辩护者处理异常，默认认定发现成立"],
+                ),
             )
 
     def _build_defense_prompt(

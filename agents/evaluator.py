@@ -33,12 +33,12 @@ class EvaluationResult(BaseModel):
     从覆盖率、清晰度、可操作性三个维度评估评审质量。
     """
 
-    score: float = Field(default=0.0, ge=0.0, le=1.0)
-    coverage_score: float = Field(default=0.0, ge=0.0, le=1.0)
-    clarity_score: float = Field(default=0.0, ge=0.0, le=1.0)
-    actionability_score: float = Field(default=0.0, ge=0.0, le=1.0)
-    summary: str = ""
-    improvement_suggestions: List[str] = Field(default_factory=list)
+    score: float = Field(default=0.0, ge=0.0, le=1.0, description="总体评分")
+    coverage_score: float = Field(default=0.0, ge=0.0, le=1.0, description="覆盖率评分")
+    clarity_score: float = Field(default=0.0, ge=0.0, le=1.0, description="清晰度评分")
+    actionability_score: float = Field(default=0.0, ge=0.0, le=1.0, description="可操作性评分")
+    summary: str = Field(default="", description="评估总结")
+    improvement_suggestions: List[str] = Field(default_factory=list, description="改进建议")
 
 
 _EVALUATOR_SYS_PROMPT = """你是一位评审质量评估专家。对代码评审报告的质量进行评估。

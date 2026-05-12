@@ -264,13 +264,12 @@ async def run_pipeline(args: argparse.Namespace) -> None:
 
     _main_logger.info("报告已输出: %s", output_path)
 
-    # Phase 8: 质量评估（可选）
+    # Phase 8: 质量评估
     if not args.skip_evaluation:
         _main_logger.info("[Phase 8] AI 质量评估")
         evaluator = EvaluatorAgent(
             name="EvaluatorAgent",
             model=model,
-            formatter=formatter,
         )
         eval_result = await evaluator.evaluate(verdict, pr_context)
         _main_logger.info(

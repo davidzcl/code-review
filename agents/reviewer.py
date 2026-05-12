@@ -268,7 +268,7 @@ class ReviewerAgent(ReActAgent):
             for f in findings:
                 f.reviewer = self.name
                 f.role = self._role
-                resolved = self._resolve_line_range(f.file_path, None, diff_chunks)
+                resolved = self._resolve_line_range(f.file_path, f.chunk_index, diff_chunks)
                 if resolved != (0, 0):
                     f.line_range = resolved
             return findings

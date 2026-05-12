@@ -67,8 +67,8 @@ class _ModelRegistry:
     def __new__(cls) -> _ModelRegistry:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._factories: Dict[str, ModelFactory] = {}
-            cls._instance._model_classes: Dict[str, Type[ChatModelBase]] = {}
+            cls._instance._factories: Dict[str, ModelFactory] = {} # type: ignore
+            cls._instance._model_classes: Dict[str, Type[ChatModelBase]] = {} # type: ignore
         return cls._instance
 
     def register(
