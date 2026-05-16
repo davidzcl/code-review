@@ -17,6 +17,7 @@ from agentscope.formatter import FormatterBase
 from agentscope.memory import InMemoryMemory
 from agentscope.model import ChatModelBase
 from agentscope.tool import Toolkit
+from agentscope.message import Msg
 
 from agents.base import AgentInitializationError
 from agents.formatter_registry import create_formatter, infer_formatter_type
@@ -188,10 +189,13 @@ class ReviewerAgent(ReActAgent):
 
         prompt = self._build_review_prompt(diff_chunks, pr_context)
 
-        from agentscope.message import Msg
-
         msg = Msg(self.name, prompt, "user")
         reply = await self.reply(msg, structured_model=ReviewReply)
+        
+        _reviewer_logger.info(
+            "Reviewer 输出: %s",
+            reply,
+               )
 
         findings = self._parse_findings(reply, diff_chunks)
 

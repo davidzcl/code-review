@@ -112,6 +112,12 @@ class ProsecutorAgent(ReActAgent):
 
         try:
             response = await self.reply(msg, structured_model=ChallengeReply)
+            
+            _prosecutor_logger.info(
+                "Prosecutor 输出: %s",
+                response,
+                )
+            
             metadata = response.metadata or {}
             challenge = Challenge(
                 finding_id=finding.id,

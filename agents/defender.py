@@ -142,6 +142,12 @@ class DefenderAgent(ReActAgent):
 
         try:
             response = await self.reply(msg, structured_model=DefenseReply)
+            
+            _defender_logger.info(
+                "Defender 输出: %s",
+                response,
+                )
+            
             metadata = response.metadata or {}
             defense = Defense(
                 finding_id=finding.id,
