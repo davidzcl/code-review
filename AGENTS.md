@@ -40,6 +40,7 @@ code-review/
 ├── pipeline/      # 调度编排（并行评审、辩论循环、合并、裁决）
 ├── test/          # 测试与 fixtures
 ├── docs/          # 项目文档
+├── evaluation/    # 评测系统相关代码（指标设计、基准测试、测试用例）
 ├── skills/        # 技能注册目录（skill.md）
 ├── config.py      # 配置中心（环境变量 + ReviewerProfile）
 ├── main.py        # 系统入口

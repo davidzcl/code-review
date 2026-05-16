@@ -123,13 +123,15 @@ def git_diff(
 def get_changed_files(
     base: Optional[str] = None,
     target: Optional[str] = None,
+    cwd: Optional[str] = None,
     by_type: bool = False,
 ) -> List[str] | Dict[str, List[str]]:
     """提取变更文件列表，可选按扩展名分组
 
     Args:
-        base:    基准 commit
-        target:  目标 commit
+        base:    基准 commit/tag
+        target:  目标 commit/tag
+        cwd:     执行目录，默认当前工作区
         by_type: 是否按文件扩展名分组返回
 
     Returns:
@@ -145,7 +147,7 @@ def get_changed_files(
     if target:
         args.append(target)
 
-    files = [f.strip() for f in _run_git(args).splitlines() if f.strip()]
+    files = [f.strip() for f in _run_git(args, cwd).splitlines() if f.strip()]
 
     if not by_type:
         return files

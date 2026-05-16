@@ -197,13 +197,21 @@ def _dashscope_factory(**kwargs: Any) -> DashScopeChatModel:
     # 部分模型需要多模态 API，但 AgentScope 的自动检测
     # （仅检查 -vl 后缀和 qvq 前缀）无法识别。
     multimodality = kwargs.pop("multimodality", False)
+    
+    # 温度参数
+    temperature = kwargs.pop("temperature", 0.7)
+    
+    # 思考模式
+    enable_thinking = kwargs.pop("enable_thinking", False)
 
     # 传递剩余参数给模型构造函数
     return DashScopeChatModel(
         model_name=model_name,
         api_key=api_key,
         stream=stream,
+        enable_thinking=enable_thinking,
         multimodality=multimodality,
+        temperature=temperature,
     )
 
 

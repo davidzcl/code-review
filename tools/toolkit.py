@@ -17,8 +17,11 @@ from tools.risk_scan import (
     hotspot_analysis,
     scan_risk_signals,
 )
+from tools.search import search_code
 from tools.secret_scanner import SecretFinding, scan_secrets
 from tools.diff_parser import parse_diff
+from tools.test_runner import run_tests
+from tools.tools import get_changed_files, read_file
 
 _toolkit_logger = logger.get_logger("tools.toolkit")
 
@@ -138,6 +141,9 @@ def _guardrail_prompt(
 def build_guardrail_toolkit(
     register_risk: bool = True,
     register_secret: bool = True,
+    base: str = "",
+    target: str = "",
+    cwd: Optional[str] = None,
 ) -> Toolkit:
     """创建并返回预注册了 Guardrail 工具的 Toolkit 实例。
 
@@ -155,6 +161,7 @@ def build_guardrail_toolkit(
             tool_func=tool_scan_risk_signals,
             func_name="scan_risk_signals",
             func_description="扫描代码变更中的安全风险信号和测试覆盖缺口",
+            preset_kwargs={"base": base, "target": target, "cwd": cwd},
         )
         _toolkit_logger.info("已注册工具: scan_risk_signals")
 
@@ -165,6 +172,37 @@ def build_guardrail_toolkit(
             func_description="扫描代码变更中的密钥泄露",
         )
         _toolkit_logger.info("已注册工具: scan_secrets")
+        
+    tk.register_tool_function(
+        tool_func=search_code,
+        func_name="search_code",
+        func_description="在代码库中搜索指定模式的代码",
+        preset_kwargs={"path": cwd},
+    )
+    _toolkit_logger.info("已注册工具: search_code")
+    
+    tk.register_tool_function(
+        tool_func=run_tests,
+        func_name="run_tests",
+        func_description="运行测试套件",
+        preset_kwargs={"cwd": cwd},
+    )
+    _toolkit_logger.info("已注册工具: run_tests")
+    
+    tk.register_tool_function(
+        tool_func=get_changed_files,
+        func_name="get_changed_files",
+        func_description="获取代码变更中的改变文件",
+        preset_kwargs={"base": base, "target": target, "cwd": cwd},
+    )
+    _toolkit_logger.info("已注册工具: get_changed_files")
+    
+    tk.register_tool_function(
+        tool_func=read_file,
+        func_name="read_file",
+        func_description="读取文件内容",
+    )
+    _toolkit_logger.info("已注册工具: read_file")
         
     tk.register_agent_skill(r"D:\project\code-review\skills\code-review")
     _toolkit_logger.info("已注册技能: code-review skill")

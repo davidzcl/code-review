@@ -88,6 +88,7 @@ DEFAULT_DASHSCOPE_MODEL_CONFIG: Dict[str, Any] = {
     "stream": True,
     "api_key": DASHSCOPE_API_KEY,
     "multimodality": True,
+    "temperature": 0.5,
 }
 
 DEFAULT_OPENAI_MODEL_CONFIG: Dict[str, Any] = {

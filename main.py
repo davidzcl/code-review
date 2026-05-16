@@ -179,7 +179,7 @@ async def run_pipeline(args: argparse.Namespace) -> None:
     # Phase 2: 创建评审者
     _main_logger.info("[Phase 2] 创建评审者 (%d 个)", len(DEFAULT_REVIEWER_PROFILES))
 
-    guardrail_toolkit = build_guardrail_toolkit()
+    guardrail_toolkit = build_guardrail_toolkit(args.base, args.target, cwd=args.repo_dir)
 
     reviewers = []
     for profile in DEFAULT_REVIEWER_PROFILES:
