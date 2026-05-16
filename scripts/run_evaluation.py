@@ -19,6 +19,7 @@ from config import (
     DEFAULT_OPENAI_MODEL_CONFIG,
     DASHSCOPE_API_KEY,
     OPENAI_API_KEY,
+    get_model_config,
 )
 from tools.toolkit import Toolkit
 from tools.tools import (
@@ -43,14 +44,6 @@ from agents.defender import DefenderAgent
 # 设置项目路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Windows 控制台 UTF-8 支持
-# if sys.platform == "win32":
-#     os.system("chcp 65001 >nul 2>&1")
-#     if hasattr(sys.stdout, "reconfigure"):
-#         sys.stdout.reconfigure(encoding="utf-8")
-#     if hasattr(sys.stderr, "reconfigure"):
-#         sys.stderr.reconfigure(encoding="utf-8")
-
 
 def create_real_model(model_type: str = "dashscope", model_name: str = None):
     """创建真实模型实例
@@ -60,26 +53,11 @@ def create_real_model(model_type: str = "dashscope", model_name: str = None):
         model_name: 模型名称，None 则使用默认
     """
     
-    if model_type == "dashscope":
-        if not DASHSCOPE_API_KEY:
-            raise ValueError("DASHSCOPE_API_KEY 未配置，请在 .env 文件中设置")
-        config = DEFAULT_DASHSCOPE_MODEL_CONFIG.copy()
-        if model_name:
-            config["model_name"] = model_name
-        config["temperature"] = 0.0  # 评测时使用确定性输出
-        return create_model(config)
-    
-    elif model_type == "openai":
-        if not OPENAI_API_KEY:
-            raise ValueError("OPENAI_API_KEY 未配置，请在 .env 文件中设置")
-        config = DEFAULT_OPENAI_MODEL_CONFIG.copy()
-        if model_name:
-            config["model_name"] = model_name
-        config["temperature"] = 0.0
-        return create_model(config)
-    
-    else:
-        raise ValueError(f"不支持的模型类型: {model_type}")
+    config = get_model_config(model_type)
+    if model_name:
+        config["model_name"] = model_name
+    config["temperature"] = 0.0  # 评测时使用确定性输出
+    return create_model(config)
 
 
 def create_toolkit():
