@@ -156,7 +156,7 @@ class ReviewerAgent(ReActAgent):
         )
         lines.append(
             "每个发现必须包含: "
-            "severity(critical|important|minor), file_path, "
+            "severity(high|medium|low|critical), file_path, "
             "title, description, suggestion, confidence(0.0-1.0), "
             "evidence(string[], 引用变更中具体的代码行内容), "
             "chunk_index(integer, 可选, 对应上方「变更块 N」的序号)"
@@ -296,7 +296,7 @@ class ReviewerAgent(ReActAgent):
                     finding = Finding(
                         reviewer=self.name,
                         role=self._role,
-                        severity=item.get("severity", "minor"),
+                        severity=item.get("severity", "low"),
                         file_path=item.get("file_path", ""),
                         line_range=(0, 0),
                         title=item.get("title", ""),

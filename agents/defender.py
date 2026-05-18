@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -29,8 +29,8 @@ class DefenseReply(BaseModel):
     """辩护回复的数据结构。"""
     finding_stands: bool = Field(default=True, description="是否支持该发现")
     counter_evidence: List[str] = Field(default_factory=list, description="反证证据")
-    revised_severity: Optional[str] = Field(default=None, description="修订后的严重程度")
-    revised_confidence: Optional[float] = Field(default=None, description="修订置信度")
+    revised_severity: Literal["high", "medium", "low", "critical"] = Field(default="low", description="修订后的严重程度")
+    revised_confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="修订置信度")
 
 class Defense(BaseModel):
     """辩护结果的数据结构。"""

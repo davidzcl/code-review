@@ -30,7 +30,7 @@ class ChallengeReply(BaseModel):
     """质疑回复的数据结构。"""
     is_valid: bool = Field(default=True, description="是否有效")
     reasons: List[str] = Field(default_factory=list, description="质疑理由")
-    confidence: float = Field(default=0.0, description="置信度")
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="置信度")
 
 class Challenge(BaseModel):
     """质疑结果的数据结构。"""

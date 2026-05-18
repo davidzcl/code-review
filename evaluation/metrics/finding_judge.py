@@ -9,7 +9,17 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass, field
+from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
+
+from agents.model_registry import create_model
+
+class FindingJudgeReply(BaseModel):
+    """Finding 评测裁判回复"""
+
+    is_match: bool = Field(default=False, description="是否匹配")
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="匹配置信度")
+    reasoning: str = Field(default="", description="匹配理由")
 
 
 @dataclass
@@ -44,9 +54,9 @@ class FindingJudge:
     使用 LLM 评估智能体输出的 Finding 与 Ground Truth 的匹配程度。
     """
 
-    def __init__(self, model_name: str = "qwen-max"):
+    def __init__(self, model_name: str = "qwen3.6-flash"):
         self.model_name = model_name
-        self._llm_client = None
+        self._llm_client = create_model({"model_name": model_name, "model_type": "dashscope", "temperature": 0.7})
 
     async def _call_llm(self, prompt: str) -> Dict[str, Any]:
         """调用 LLM 进行评估
