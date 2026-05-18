@@ -23,6 +23,8 @@ from evaluation.metrics import (
     FindingJudge,
     BatchEvaluationResult,
 )
+from tools.diff_parser import DiffChunk
+from tools.pr_parser import PRContext
 
 
 @dataclass
@@ -308,8 +310,6 @@ class ReviewerBenchmark:
         Returns:
             包含 findings 和 tool_calls 的字典
         """
-        from tools.diff_parser import DiffChunk
-        from tools.pr_parser import PRContext
 
         diff_chunks = [
             DiffChunk(
@@ -334,6 +334,14 @@ class ReviewerBenchmark:
         try:
             if hasattr(agent, "review"):
                 findings = await agent.review(diff_chunks, pr_context)
+                tool_calls = []
+
+                if hasattr(agent, "tool_call_history"):
+                    tool_calls = agent.tool_call_history
+                    # 清空历史，避免下次评测累积
+                    if hasattr(agent, "clear_tool_call_history"):
+                        agent.clear_tool_call_history()
+            
             elif hasattr(agent, "__call__"):
                 findings = agent(diff_chunks, pr_context)
             else:
@@ -355,7 +363,7 @@ class ReviewerBenchmark:
 
             return {
                 "findings": findings_list,
-                "tool_calls": [],
+                "tool_calls": tool_calls,
             }
 
         except Exception as e:

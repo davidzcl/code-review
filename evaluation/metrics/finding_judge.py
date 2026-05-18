@@ -56,7 +56,7 @@ class FindingJudge:
 
     def __init__(self, model_name: str = "qwen3.6-flash"):
         self.model_name = model_name
-        self._llm_client = create_model({"model_name": model_name, "model_type": "dashscope", "temperature": 0.7})
+        self._llm_client = create_model({"model_name": model_name, "model_type": "dashscope", "temperature": 0.5, "structured_model": FindingJudgeReply})
 
     async def _call_llm(self, prompt: str) -> Dict[str, Any]:
         """调用 LLM 进行评估
@@ -74,7 +74,7 @@ class FindingJudge:
                 "reasoning": "LLM client not initialized",
             }
 
-        response = await self._llm_client.chat(prompt)
+        response = await self._llm_client(prompt)
         return self._parse_llm_response(response)
 
     def _parse_llm_response(self, response: str) -> Dict[str, Any]:

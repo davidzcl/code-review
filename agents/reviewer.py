@@ -18,10 +18,12 @@ from agentscope.memory import InMemoryMemory
 from agentscope.model import ChatModelBase
 from agentscope.tool import Toolkit
 from agentscope.message import Msg
+from agentscope.tool import ToolUseBlock
 
 from agents.base import AgentInitializationError
 from agents.formatter_registry import create_formatter, infer_formatter_type
 from agents.finding import Finding
+from evaluation.metrics.tool_usage import ToolCallRecord
 from logger import logger
 from tools.diff_parser import DiffChunk
 from tools.pr_parser import PRContext
@@ -84,11 +86,52 @@ class ReviewerAgent(ReActAgent):
             "初始化评审者 Agent: name=%s role=%s model=%s",
             name, role, type(model).__name__,
         )
+        
+        self._tool_call_history: List[ToolCallRecord] = []
+        if toolkit is not None:
+            # 包装原始 call_tool_function 以记录调用
+            original_call = toolkit.call_tool_function
+
+            async def instrumented_call(tool_call: ToolUseBlock) -> Any:
+                import time
+                start_time = time.time()
+                tool_name = tool_call["name"]
+                parameters = tool_call.get("input", {})
+
+                try:
+                    result = await original_call(tool_call)
+                    self._tool_call_history.append(ToolCallRecord(
+                        tool_name=tool_name,
+                        parameters=parameters,
+                        success=True,
+                        timestamp=start_time,
+                    ))
+                    return result
+                except Exception as e:
+                    self._tool_call_history.append(ToolCallRecord(
+                        tool_name=tool_name,
+                        parameters=parameters,
+                        success=False,
+                        error=str(e),
+                        timestamp=start_time,
+                    ))
+                    raise
+
+            toolkit.call_tool_function = instrumented_call
 
     @property
     def role(self) -> str:
         """获取评审角色。"""
         return self._role
+    
+    @property
+    def tool_call_history(self) -> List[ToolCallRecord]:
+        """获取工具调用历史记录"""
+        return self._tool_call_history.copy()
+
+    def clear_tool_call_history(self) -> None:
+        """清空工具调用历史记录"""
+        self._tool_call_history.clear()
 
     def _build_review_prompt(
         self,
